@@ -1,11 +1,11 @@
 // ORL Model
 data {
-  int<lower=1> T; // trial
-  int<lower=1> s;  // subject
-  int<lower=1, upper= T> Tsubj[s];
-  real o[s,T]; // outcome
-  real sign[s,T]; // sign for frequency updating
-  int x[s,T]; // choice 
+  int<lower=1> T; // Maximum number of trials
+  int<lower=1> s;  // Number of subjects
+  int<lower=1, upper= T> Tsubj[s]; // Number of trials for each subject
+  real o[s,T]; // outcome for each subject on each trial
+  real sign[s,T]; // sign for frequency updating for each subject on each trial
+  int x[s,T]; // choice for each subject on each trial
 }
 
 // Set starting value at zero
@@ -28,7 +28,7 @@ parameters {
  real<lower=0> sigma_wf;
  real<lower=0> sigma_wp;
  
- // individual raw paremeters 
+ // individual parameters 
  vector<lower=0, upper = 1>[s] Arew;
  vector<lower=0, upper = 1>[s] Apun;
  vector<lower=0, upper = 5>[s] K;
@@ -68,36 +68,36 @@ model {
     vector[4] PE_EFall; // Prediction error frequency, unchosen
     vector[4] PE_EVall; // Prediction error value, unchosen 
     
-    real PE_EF;
-    real PE_EV;
-    real EF_chosen;
-    real EV_chosen;
+    real PE_EF; // Prediction error for expected frequency
+    real PE_EV; // Prediciton errror for expected value
+    real EF_chosen; // Expected frequency for chosen deck
+    real EV_chosen; // Expected value for chosen deck
     real K_tr; // K transformed 
     
     
-    // Set starting values
+    // Set starting values to zero
     EF = initV;
     EV = initV;
     PS = initV;
     util = initV;
-    K_tr = pow(3, K[i])-1;
+    K_tr = pow(3, K[i])-1; # Transform K 
     
     
     for (t in 1:Tsubj[i]){
-      // Make choice based on utility using the softmax choice rule
-      x[i, t] ~ categorical_logit(util); // Change to actual softmax?
+      // Make choice 
+      x[i, t] ~ categorical_logit(util); 
       
       // Compute prediction errors
       PE_EV = o[i,t] - EV[x[i,t]];
       PE_EF = sign[i,t] - EF[x[i,t]];
-      PE_EFall = -sign[i,t]/3 - EF;
+      PE_EFall = -sign[i,t]/3 - EF; # Compute counterfactual prediction error
       
-      // store EF and EV for chosen deck
+      // Store EF and EV for chosen deck
       EF_chosen = EF[x[i,t]];
       EV_chosen = EV[x[i,t]];
       
       if (o[i,t] >= 0){
-        // update EF for all decks
+        // Update EF for all decks
         EF += Apun[i] * PE_EFall;
         // Update chosen deck
         EF[x[i,t]] = EF_chosen + Arew[i]*PE_EF;
@@ -115,6 +115,7 @@ model {
       PS[x[i,t]] = 1;
       PS /= (1+ K_tr);
       
+      // Calculate utility
       util = EV + EF*wf[i] + PS * wp[i];
     }
   }
@@ -164,6 +165,7 @@ generated quantities {
     
     for (t in 1:Tsubj[i]){
       
+      # Compute loglikelihood and prediction
       log_lik[i] += categorical_logit_lpmf(x[i,t]| util);
       
       y_pred[i,t] = categorical_rng(softmax(util));
@@ -178,7 +180,7 @@ generated quantities {
       EV_chosen = EV[x[i,t]];
       
       if (o[i,t] >= 0){
-        // update EF for all decks
+        // Update EF for all decks
         EF += Apun[i] * PE_EFall;
         // Update chosen deck
         EF[x[i,t]] = EF_chosen + Arew[i]*PE_EF;
@@ -195,6 +197,8 @@ generated quantities {
       
       PS[x[i,t]] = 1;
       PS /= (1+ K_tr);
+      
+      // Calculate utility
       
       util = EV + EF*wf[i] + PS * wp[i];
       }
